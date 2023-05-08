@@ -1,0 +1,83 @@
+{
+  "name": "cap-multitenant-bookshop",
+  "version": "1.0.0",
+  "description": "A simple CAP project.",
+  "repository": "https://github.com/stockbal/cap-multitenant-bookshop",
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "@sap/cds": "^6",
+    "@sap/cds-mtxs": "^1",
+    "@sap/xssec": "^3",
+    "express": "^4",
+    "hdb": "^0.19.0",
+    "passport": "^0"
+  },
+  "devDependencies": {
+    "@sap/ux-specification": "^1.108.4",
+    "rimraf": "^3.0.2",
+    "sqlite3": "^5.1.6"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "watch-admin-ui": "cds watch --open admin-ui/webapp/index.html?sap-ui-xx-viewCache=false",
+    "undeploy": "cf undeploy multitenant-bookshop --delete-services --delete-service-keys --delete-service-brokers",
+    "build": "rimraf resources mta_archives && mbt build --mtar archive",
+    "deploy": "cf deploy mta_archives/archive.mtar --retries 1",
+    "watch-view-books": "cds watch --open view-books/webapp/index.html?sap-ui-xx-viewCache=false"
+  },
+  "eslintConfig": {
+    "extends": "eslint:recommended",
+    "env": {
+      "es2020": true,
+      "node": true,
+      "jest": true,
+      "mocha": true
+    },
+    "globals": {
+      "SELECT": true,
+      "INSERT": true,
+      "UPDATE": true,
+      "DELETE": true,
+      "CREATE": true,
+      "DROP": true,
+      "CDL": true,
+      "CQL": true,
+      "CXL": true,
+      "cds": true
+    },
+    "rules": {
+      "no-console": "off",
+      "require-atomic-updates": "off"
+    }
+  },
+  "cds": {
+    "requires": {
+      "[development]": {
+        "auth": {
+          "kind": "dummy"
+        },
+        "db": {
+          "kind": "sqlite"
+        }
+      },
+      "[production]": {
+        "auth": {
+          "kind": "xsuaa"
+        },
+        "db": {
+          "kind": "hana-mt"
+        }
+      },
+      "approuter": {
+        "kind": "cloudfoundry"
+      },
+      "multitenancy": true
+    },
+    "profile": "with-mtx-sidecar"
+  },
+  "sapux": [
+    "app/admin-ui",
+    "app/view-books"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "scopes": [
+    {
+      "name": "$XSAPPNAME.ShopUser",
+      "description": "Shop User"
+    },
+    {
+      "name": "$XSAPPNAME.Admin",
+      "description": "Admin"
+    },
+    {
+      "name": "$XSAPPNAME.mtcallback",
+      "description": "Subscription via SaaS Registry",
+      "grant-as-authority-to-apps": [
+        "$XSAPPNAME(application,sap-provisioning,tenant-onboarding)"
+      ]
+    }
+  ],
+  "attributes": [],
+  "role-templates": [
+    {
+      "name": "ShopUser",
+      "description": "generated",
+      "scope-references": [
+        "$XSAPPNAME.ShopUser"
+      ],
+      "attribute-references": []
+    },
+    {
+      "name": "Admin",
+      "description": "generated",
+      "scope-references": [
+        "$XSAPPNAME.Admin"
+      ],
+      "attribute-references": []
+    }
+  ],
+  "role-collections": [
+    {
+      "name": "ShopUser",
+      "description": "View Books",
+      "role-template-references": [
+        "$XSAPPNAME.ShopUser"
+      ]
+    },
+    {
+      "name": "Admin",
+      "description": "Manage Books",
+      "role-template-references": [
+        "$XSAPPNAME.Admin"
+      ]
+    }
+  ]
+}

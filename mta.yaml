@@ -1,0 +1,232 @@
+_schema-version: "3.1"
+ID: multitenant-bookshop
+description: A simple CAP project.
+version: 1.0.0
+parameters:
+  deploy_mode: html5-repo
+  enable-parallel-deployments: true
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npx -p @sap/cds-dk cds build --production
+
+modules:
+  # -------------------------------------------
+  # Service module
+  # -------------------------------------------
+  - name: multitenant-bookshop-srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      buildpack: nodejs_buildpack
+    build-parameters:
+      builder: npm-ci
+      ignore:
+        - node_modules/
+    properties:
+      tenantSeparator: ~{approuter/tenant-separator}
+      appDomain: ~{approuter/app-domain}
+      srvUrl: "https://${app-name}.${default-domain}"
+      approuterUrl: ~{approuter/app-url}
+      appName: ~{approuter/application}
+    requires:
+      - name: multitenant-bookshop-auth
+      - name: multitenant-bookshop-db
+      - name: approuter
+    provides:
+      - name: srv-api
+        properties:
+          srv-url: ${default-url}
+
+  # -------------------------------------------
+  # Approuter
+  # -------------------------------------------
+  - name: multitenant-bookshop
+    type: approuter.nodejs
+    path: approuter/
+    parameters:
+      app-name: bookshop-${space}
+      disk-quota: 256MB
+      memory: 128MB
+      tenant-separator: "-"
+      app-domain: ${app-name}.${default-domain}
+      keep-existing-routes: true
+    build-parameters:
+      ignore:
+        - node_modules/
+    provides:
+      - name: app-api
+        properties:
+          app-protocol: ${protocol}
+          app-uri: ${default-uri}
+      - name: approuter
+        properties:
+          app-url: ${default-url}
+          application: ${app-name}
+          tenant-separator: ${tenant-separator}
+          app-domain: ${app-domain}
+    properties:
+      TENANT_HOST_PATTERN: "^(.*)${tenant-separator}${app-domain}"
+    requires:
+      - name: srv-api
+        group: destinations
+        properties:
+          forwardAuthToken: true
+          name: srv-api
+          url: ~{srv-url}
+      - name: multitenant-bookshop-app-runtime
+      - name: multitenant-bookshop-auth
+      - name: multitenant-bookshop-destination-service
+        group: destinations
+        properties:
+          forwardAuthToken: false
+          name: ui5
+          url: https://ui5.sap.com
+      - name: mtx-api
+        group: destinations
+        properties:
+          name: mtx-api # must be used in xs-app.json as well
+          url: ~{mtx-url}
+
+  # -------------------------------------------
+  # Sidecar
+  # -------------------------------------------
+  - name: multitenant-bookshop-mtx
+    type: nodejs
+    path: gen/mtx/sidecar
+    build-parameters:
+      builder: npm-ci
+    parameters:
+      memory: 256M
+      disk-quota: 512M
+    provides:
+      - name: mtx-api
+        properties:
+          mtx-url: ${default-url}
+    requires:
+      - name: multitenant-bookshop-auth
+      - name: multitenant-bookshop-registry
+      - name: approuter
+        properties:
+          SUBSCRIPTION_URL: https://\${tenant_subdomain}~{tenant-separator}~{app-domain}
+      - name: multitenant-bookshop-db
+
+  - name: multitenant-bookshop-app-content
+    type: com.sap.application.content
+    path: .
+    requires:
+      - name: multitenant-bookshop-repo-host
+        parameters:
+          content-target: true
+    build-parameters:
+      build-result: resources
+      requires:
+        - artifacts:
+            - commycompanyadminui.zip
+          name: commycompanyadminui
+          target-path: resources/
+        - artifacts:
+            - commycompanyviewbooks.zip
+          name: commycompanyviewbooks
+          target-path: resources/
+
+  - name: commycompanyadminui
+    type: html5
+    path: app/admin-ui
+    build-parameters:
+      build-result: dist
+      builder: custom
+      commands:
+        - npm install
+        - npm run build:cf
+      supported-platforms: []
+
+  - name: commycompanyviewbooks
+    type: html5
+    path: app/view-books
+    build-parameters:
+      build-result: dist
+      builder: custom
+      commands:
+        - npm install
+        - npm run build:cf
+      supported-platforms: []
+
+resources:
+  - name: multitenant-bookshop-auth
+    type: org.cloudfoundry.managed-service
+    requires:
+      - name: approuter
+    properties:
+      XSAPPNAME: ${xsuaa-app}
+    parameters:
+      xsuaa-app: ~{approuter/application}
+      config:
+        tenant-mode: shared
+        xsappname: ~{approuter/application}
+      path: ./xs-security.json
+      service: xsuaa
+      service-plan: application
+
+  - name: multitenant-bookshop-repo-host
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-name: multitenant-bookshop-html5-srv
+      service-plan: app-host
+
+  - name: multitenant-bookshop-app-runtime
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: html5-apps-repo
+      service-name: multitenant-bookshop-html5-rt
+      service-plan: app-runtime
+
+  - name: multitenant-bookshop-destination-service
+    type: org.cloudfoundry.managed-service
+    parameters:
+      config:
+        HTML5Runtime_enabled: false
+        init_data:
+          instance:
+            destinations:
+              - Authentication: NoAuthentication
+                Name: ui5
+                ProxyType: Internet
+                Type: HTTP
+                URL: https://ui5.sap.com
+            existing_destinations_policy: update
+        version: 1.0.0
+      service: destination
+      service-name: multitenant-bookshop-destination-service
+      service-plan: lite
+
+  - name: multitenant-bookshop-registry
+    type: org.cloudfoundry.managed-service
+    requires:
+      - name: mtx-api
+      - name: multitenant-bookshop-auth
+      - name: approuter
+    parameters:
+      service: saas-registry
+      service-plan: application
+      config:
+        xsappname: ~{multitenant-bookshop-auth/XSAPPNAME}
+        appName: ~{approuter/application}-${org}
+        displayName: Bookshop SaaS ${space}
+        description: Bookshop SaaS Application
+        category: SaaS Multitenant Apps
+        appUrls:
+          getDependencies: ~{mtx-api/mtx-url}/-/cds/saas-provisioning/dependencies
+          onSubscription: ~{mtx-api/mtx-url}/-/cds/saas-provisioning/tenant/{tenantId}
+          onSubscriptionAsync: true
+          onUnSubscriptionAsync: true
+          onUpdateDependenciesAsync: true
+          callbackTimeoutMillis: 300000 # Increase if your deployments are taking longer than that
+
+  - name: multitenant-bookshop-db
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: service-manager
+      service-plan: container

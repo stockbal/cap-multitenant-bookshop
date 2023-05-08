@@ -1,0 +1,9 @@
+@srv = http://localhost:4004
+
+# Subscribe to tenant
+POST {{srv}}/-/cds/deployment/subscribe 
+Content-Type: application/json
+
+{
+    "tenant": "t1"
+}
